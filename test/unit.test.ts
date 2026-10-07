@@ -411,3 +411,27 @@ describe("outputPayload", () => {
     assert.equal(inline.base64, png.toString("base64"));
   });
 });
+
+describe("in-server retries", async () => {
+  const { isRetryableInServer } = await import("../src/chatgpt/provider.js");
+  const { loadChatGptConfig } = await import("../src/chatgpt/config.js");
+
+  it("retries transient failures only", () => {
+    assert.equal(isRetryableInServer(new TurnTimedOut("slow")), true);
+    assert.equal(isRetryableInServer(new ImageGenerationError("x", "UI_CHANGED")), true);
+    assert.equal(isRetryableInServer(new ImageGenerationError("x", "NO_IMAGE_RETURNED")), true);
+    assert.equal(isRetryableInServer(new ImageGenerationError("something went wrong")), true);
+    assert.equal(isRetryableInServer(new Error("page.goto: Timeout 60000ms exceeded")), true);
+    assert.equal(isRetryableInServer(new UsageLimitReached("limit")), false);
+    assert.equal(isRetryableInServer(new SessionNotReady()), false);
+    assert.equal(isRetryableInServer(new ContentPolicyBlocked("no")), false);
+    assert.equal(isRetryableInServer(new Error("unexpected bug")), false);
+  });
+
+  it("reads retry configuration", () => {
+    assert.equal(loadChatGptConfig({}).retries, 2);
+    assert.equal(loadChatGptConfig({ CHATGPT_RETRIES: "0" }).retries, 0);
+    assert.equal(loadChatGptConfig({ CHATGPT_RETRIES: "4" }).retries, 4);
+    assert.equal(loadChatGptConfig({ CHATGPT_RETRY_DELAY_SECONDS: "5" }).retryDelayMs, 5000);
+  });
+});

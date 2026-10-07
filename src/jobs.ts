@@ -1,11 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import type { NormalizedArguments } from "./arguments.js";
-import { ImageGenerationError, SessionNotReady, UsageLimitReached } from "./chatgpt/errors.js";
+import { SessionNotReady, toJobError, UsageLimitReached } from "./chatgpt/errors.js";
 import type { ImageProvider } from "./chatgpt/provider.js";
 import { audit, auditError } from "./log.js";
 import { generationWasPurged, loadPersistedJob, loadPersistedJobs, outputExists, persistCompletedJob, purgeGeneration } from "./media.js";
 import type { GenerationJob, InlineReferenceImage, JobError, ReferenceImage } from "./types.js";
+
+export { toJobError };
 
 export interface JobManagerOptions {
   minIntervalMs: number;
@@ -270,15 +272,4 @@ function circuitError(circuit: Circuit): JobError {
   return circuit.reason === "usage_limit"
     ? { code: "USAGE_LIMIT_REACHED", message: "ChatGPT usage limit reached; generation paused", retryable: true, retryAfter: new Date(circuit.until).toISOString() }
     : { code: "SESSION_NOT_READY", message: "The ChatGPT profile is not logged in; an operator must run `npm run login`", retryable: false, retryAfter: new Date(circuit.until).toISOString() };
-}
-
-export function toJobError(error: unknown): JobError {
-  const message = (error instanceof Error ? error.message : String(error)).slice(0, 2000);
-  if (error instanceof ImageGenerationError) {
-    const retryable = ["USAGE_LIMIT_REACHED", "TURN_TIMED_OUT", "GENERATION_FAILED", "NO_IMAGE_RETURNED"].includes(error.code);
-    return { code: error.code, message, retryable };
-  }
-  if (/Timeout|net::ERR_|Target page, context or browser has been closed/i.test(message)) return { code: "BROWSER_ERROR", message, retryable: true };
-  if (/Executable doesn't exist|ProcessSingleton|SingletonLock|profile.*in use/i.test(message)) return { code: "SERVER_NOT_CONFIGURED", message, retryable: false };
-  return { code: "GENERATION_FAILED", message, retryable: false };
 }

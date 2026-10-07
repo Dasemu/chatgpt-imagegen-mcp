@@ -20,6 +20,8 @@ MCP client ──POST /mcp──▶ tools.ts ──▶ JobManager (serial queue,
 6. Wait for a new image outside the user message, at least 256 px per side, fully loaded, with a `src` that stays the same for 3 polls and no "creating image" text. ChatGPT shows blurred partial previews first, so the first image seen is not the final one.
 7. Download it through the browser request context (it carries the session cookies), validate size and format, store it as `<generationId>-<index>.<ext>`.
 
+Transient failures (`TURN_TIMED_OUT`, `UI_CHANGED`, `NO_IMAGE_RETURNED`, `BROWSER_ERROR`, generic ChatGPT errors) are retried up to `CHATGPT_RETRIES` times, each in a new chat with a growing pause (`CHATGPT_RETRY_DELAY_SECONDS × attempt`); a crashed browser is relaunched first. Usage limits, lost sessions and content-policy refusals fail immediately. The final error message says how many attempts were made.
+
 `image_count > 1` repeats this in a new chat per image. Every job runs alone because the profile can only be used by one browser.
 
 ## Lineage
