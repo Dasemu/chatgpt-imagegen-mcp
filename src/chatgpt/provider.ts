@@ -1,3 +1,6 @@
+import { cp, mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import type { Page } from "playwright";
 import { imageDimensions } from "../image.js";
 import { audit } from "../log.js";
@@ -16,6 +19,8 @@ export const MIN_IMAGE_BYTES = 20_000;
 export interface ImageProvider {
   generateImages(generationId: string, request: ImageRequest): Promise<StoredOutput[]>;
   checkSession(): Promise<boolean>;
+  /** Closes the browser and copies the logged-in profile to a new temporary directory. */
+  snapshotProfile(): Promise<string>;
   close(): Promise<void>;
 }
 
@@ -60,6 +65,13 @@ export class ChatGptImageProvider implements ImageProvider {
     } finally {
       this.browser.release();
     }
+  }
+
+  async snapshotProfile(): Promise<string> {
+    await this.browser.close();
+    const target = await mkdtemp(path.join(os.tmpdir(), "chatgpt-profile-"));
+    await cp(this.config.profileDir, target, { recursive: true, filter: (source) => !/Singleton(Lock|Socket|Cookie)$/.test(source) });
+    return target;
   }
 
   async close(): Promise<void> {

@@ -4,6 +4,7 @@ import type { NormalizedArguments } from "./arguments.js";
 import { SessionNotReady, toJobError, UsageLimitReached } from "./chatgpt/errors.js";
 import type { ImageProvider } from "./chatgpt/provider.js";
 import { audit, auditError } from "./log.js";
+import type { SelfHealer } from "./selfheal.js";
 import { generationWasPurged, loadPersistedJob, loadPersistedJobs, outputExists, persistCompletedJob, purgeGeneration } from "./media.js";
 import type { GenerationJob, InlineReferenceImage, JobError, ReferenceImage } from "./types.js";
 
@@ -36,7 +37,8 @@ interface Circuit {
 
 type Task =
   | { kind: "generate"; job: GenerationJob }
-  | { kind: "session_check"; resolve: (loggedIn: boolean) => void; reject: (error: unknown) => void };
+  | { kind: "session_check"; resolve: (loggedIn: boolean) => void; reject: (error: unknown) => void }
+  | { kind: "selfheal_prepare"; reason: string };
 
 /**
  * Serial queue: one Chromium profile means one generation at a time. Adds random pacing between
@@ -50,7 +52,11 @@ export class JobManager {
   private circuit?: Circuit;
   private session: { loggedIn?: boolean; checkedAt?: string } = {};
 
-  constructor(private readonly provider: ImageProvider, private readonly options: JobManagerOptions = jobManagerOptionsFromEnv()) {}
+  constructor(
+    private readonly provider: ImageProvider,
+    private readonly options: JobManagerOptions = jobManagerOptionsFromEnv(),
+    private readonly selfHealer?: SelfHealer,
+  ) {}
 
   async submit(model: string, args: NormalizedArguments, taskTraceId?: string): Promise<GenerationJob> {
     this.assertAccepting();
@@ -95,6 +101,7 @@ export class JobManager {
       running: [...this.jobs.values()].some((job) => job.status === "RUNNING"),
       session: this.session,
       circuit: circuit ? { reason: circuit.reason, retryAfter: new Date(circuit.until).toISOString(), message: circuit.message } : null,
+      selfHeal: this.selfHealer?.view() ?? null,
     };
   }
 
@@ -147,6 +154,11 @@ export class JobManager {
           await this.runSessionCheck(task);
           continue;
         }
+        if (task.kind === "selfheal_prepare") {
+          this.queue.shift();
+          await this.prepareSelfHeal(task.reason);
+          continue;
+        }
         const circuit = this.openCircuit();
         if (circuit) {
           this.queue.shift();
@@ -180,11 +192,17 @@ export class JobManager {
       job.status = "COMPLETED"; job.outputs = outputs; job.completedAt = new Date().toISOString(); job.updatedAt = job.completedAt;
       job.request = undefined;
       this.session = { loggedIn: true, checkedAt: job.completedAt };
+      this.selfHealer?.recordSuccess();
       await persistCompletedJob(job);
       audit("generation_completed", { generationId: job.generationId, outputCount: outputs.length, outputBytes: outputs.reduce((sum, output) => sum + output.sizeBytes, 0), durationMs: Date.now() - new Date(job.startedAt).getTime() });
     } catch (error) {
       this.tripCircuit(error);
       this.fail(job, error);
+      const selfHealReason = job.error && this.selfHealer?.recordFailure(job.error.code);
+      if (job.error && selfHealReason) {
+        job.error.message += " A self-heal run was started; check get_usage for its pull request.";
+        this.queue.unshift({ kind: "selfheal_prepare", reason: selfHealReason });
+      }
     } finally {
       this.lastFinishedAt = Date.now();
     }
@@ -200,6 +218,15 @@ export class JobManager {
     } catch (error) {
       auditError("session_check_failed", error);
       task.reject(error);
+    }
+  }
+
+  /** Runs inside the queue so the profile is copied while no generation uses the browser. */
+  private async prepareSelfHeal(reason: string): Promise<void> {
+    try {
+      this.selfHealer?.launch(reason, await this.provider.snapshotProfile());
+    } catch (error) {
+      this.selfHealer?.abort(error);
     }
   }
 

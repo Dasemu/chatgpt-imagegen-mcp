@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { mkdtemp } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { after, before, describe, it } from "node:test";
 import { normalizeArguments, resolveModel } from "../src/arguments.js";
 import {
@@ -248,6 +251,11 @@ describe("JobManager", () => {
     async checkSession(): Promise<boolean> {
       assert.equal(this.active, 0, "checkSession ran during a generation");
       return this.sessionResult;
+    }
+    snapshots = 0;
+    async snapshotProfile(): Promise<string> {
+      this.snapshots += 1;
+      return mkdtemp(path.join(os.tmpdir(), "chatgpt-profile-"));
     }
     async close(): Promise<void> {}
   }

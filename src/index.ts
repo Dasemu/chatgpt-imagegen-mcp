@@ -8,11 +8,12 @@ import { JobManager } from "./jobs.js";
 import { audit, auditError } from "./log.js";
 import { cleanupOrphanMedia, ensureMediaDir, isOutputFilename, mediaDir, resolvePublicOutput } from "./media.js";
 import { publicMediaSigningConfigured, validatePublicMediaSignature } from "./public-media.js";
+import { SelfHealer } from "./selfheal.js";
 import { registerTools } from "./tools.js";
 import { registerUpdateRoutes } from "./update.js";
 
 const provider = new ChatGptImageProvider();
-const jobs = new JobManager(provider);
+const jobs = new JobManager(provider, undefined, new SelfHealer());
 const retentionHours = Number(process.env.MEDIA_RETENTION_HOURS) || 168;
 await ensureMediaDir();
 const orphanCleanup = async () => {

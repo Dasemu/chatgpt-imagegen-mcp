@@ -10,3 +10,5 @@ diagnostics/
 logs/
 .update.lock
 .dist-backup.*
+.selfheal-venv/
+.selfheal.lock
