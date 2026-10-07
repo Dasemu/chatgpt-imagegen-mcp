@@ -6,3 +6,7 @@ media/*
 !media/.gitkeep
 profiles/
 diagnostics/
+.browsers/
+logs/
+.update.lock
+.dist-backup.*
