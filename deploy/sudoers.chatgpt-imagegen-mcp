@@ -1,0 +1,2 @@
+# Install as /etc/sudoers.d/chatgpt-imagegen-mcp (mode 0440), validate with: visudo -cf <file>
+mcp ALL=(root) NOPASSWD: /usr/bin/systemctl restart chatgpt-imagegen-mcp.service
