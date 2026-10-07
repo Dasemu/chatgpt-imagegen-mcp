@@ -43,6 +43,6 @@ npm test
 - [docs/architecture.md](docs/architecture.md): generation flow and lineage
 - [docs/deployment.md](docs/deployment.md): install on Debian/Ubuntu with systemd
 - [docs/update.md](docs/update.md): update script and authenticated update endpoint
-- [docs/selfheal.md](docs/selfheal.md): automatic scraper repair with codex, delivered as a pull request
+- [docs/selfheal.md](docs/selfheal.md): automatic scraper repair with codex, verified live, then auto-merged and deployed
 
 > This automates a consumer web UI. It is unofficial, can break whenever chatgpt.com changes, and must comply with OpenAI's terms for the account used.
