@@ -1,0 +1,32 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>ChatGPT (new chat)</title></head>
+<body>
+  <nav aria-label="Chat history"></nav>
+  <button data-testid="profile-button">Me</button>
+  <main>
+    <div id="thread"></div>
+    <div id="prompt-textarea" contenteditable="true"></div>
+    <button data-testid="send-button" id="send">Send</button>
+    <input type="file" accept="image/*" multiple style="display:none" id="files">
+    <div id="previews"></div>
+  </main>
+  <script>
+    document.getElementById("send").addEventListener("click", () => {
+      const composer = document.getElementById("prompt-textarea");
+      const turn = document.createElement("div");
+      turn.setAttribute("data-message-author-role", "user");
+      turn.className = "user-turn";
+      turn.textContent = composer.innerText;
+      document.getElementById("thread").appendChild(turn);
+      composer.textContent = "";
+    });
+    document.getElementById("files").addEventListener("change", (event) => {
+      for (const file of event.target.files) {
+        const preview = document.createElement("div");
+        preview.className = "preview";
+        preview.textContent = file.name + ":" + file.type + ":" + file.size;
+        document.getElementById("previews").appendChild(preview);
+      }
+    });
+  </script>
+</body></html>

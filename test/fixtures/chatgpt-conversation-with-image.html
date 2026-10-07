@@ -1,0 +1,22 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>ChatGPT (conversation)</title></head>
+<body>
+  <nav aria-label="Chat history"></nav>
+  <button data-testid="profile-button"><img id="avatar" alt="" src="{{SMALL_IMG}}"></button>
+  <main>
+    <article data-testid="conversation-turn-1">
+      <div data-message-author-role="user">
+        Make it look like this.
+        <img id="reference" alt="Uploaded image" src="{{SMALL_IMG}}">
+      </div>
+    </article>
+    <article data-testid="conversation-turn-2">
+      <div data-message-author-role="assistant">
+        Here is your image.
+        <img id="generated" alt="Generated image" src="{{BIG_IMG}}">
+      </div>
+    </article>
+    <div id="prompt-textarea" contenteditable="true"></div>
+    <button data-testid="send-button">Send</button>
+  </main>
+</body></html>
