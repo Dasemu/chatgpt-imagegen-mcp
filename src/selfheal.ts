@@ -53,7 +53,18 @@ export class SelfHealer {
     state: "idle", lastStartedAt: null, lastFinishedAt: null, lastExitCode: null, lastPullRequest: null,
   };
 
-  constructor(private readonly options: SelfHealOptions = selfHealOptionsFromEnv()) {}
+  constructor(private readonly options: SelfHealOptions = selfHealOptionsFromEnv()) {
+    // A successful run ends with update.sh restarting the service, so restore the last run from the
+    // log: its status for reporting, and its start time so the cooldown survives the restart.
+    const last = parseSelfHealLog(options.logFile);
+    if (last.startedAt) {
+      this.lastStartedAt = Date.parse(last.startedAt);
+      this.status = {
+        state: last.merged || last.result === "succeeded" ? "succeeded" : last.result === "failed" ? "failed" : "idle",
+        lastStartedAt: last.startedAt, lastFinishedAt: null, lastExitCode: null, lastPullRequest: last.pullRequest,
+      };
+    }
+  }
 
   recordSuccess(): void {
     this.consecutiveFailures = 0;
@@ -123,6 +134,21 @@ export class SelfHealer {
     if (error) auditError("selfheal_failed", error);
     audit("selfheal_finished", { exitCode, pullRequest });
   }
+}
+
+export function parseSelfHealLog(logFile: string): { startedAt: string | null; pullRequest: string | null; merged: boolean; result: "succeeded" | "failed" | null } {
+  let text = "";
+  try { text = readFileSync(logFile, "utf8"); } catch { return { startedAt: null, pullRequest: null, merged: false, result: null }; }
+  const runs = text.split(/^(?=\[[^\]]+\] self-heal started:)/m);
+  const lastRun = runs.at(-1) ?? "";
+  const startedAt = lastRun.match(/^\[([^\]]+)\] self-heal started:/)?.[1] ?? null;
+  const result = lastRun.match(/SELFHEAL_RESULT (.*)$/m)?.[1];
+  return {
+    startedAt,
+    pullRequest: lastRun.match(/^SELFHEAL_PR_CREATED (\S+)/m)?.[1] ?? null,
+    merged: /^SELFHEAL_MERGED /m.test(lastRun),
+    result: result === undefined ? null : /merged|pull request created|dry run ok/.test(result) ? "succeeded" : "failed",
+  };
 }
 
 export function lastPullRequestUrl(logFile: string): string | null {

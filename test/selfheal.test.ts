@@ -8,7 +8,7 @@ import { describe, it } from "node:test";
 import { ImageGenerationError } from "../src/chatgpt/errors.js";
 import type { ImageProvider } from "../src/chatgpt/provider.js";
 import { JobManager, type JobManagerOptions } from "../src/jobs.js";
-import { lastPullRequestUrl, SelfHealer, type SelfHealOptions } from "../src/selfheal.js";
+import { lastPullRequestUrl, parseSelfHealLog, SelfHealer, type SelfHealOptions } from "../src/selfheal.js";
 import { storeImage } from "../src/media.js";
 import type { GenerationJob, ImageRequest, StoredOutput } from "../src/types.js";
 import { makePng } from "./helpers.js";
@@ -140,6 +140,77 @@ describe("SelfHealer", () => {
   });
 });
 
+describe("parseSelfHealLog and state restore", () => {
+  const logWith = (text: string) => {
+    const file = path.join(tmp("selfheal-parse"), "selfheal.log");
+    writeFileSync(file, text);
+    return file;
+  };
+  const stamp = (msAgo: number) => new Date(Date.now() - msAgo).toISOString().replace(/\.\d+Z$/, "Z");
+
+  it("uses the last run only", () => {
+    const file = logWith([
+      "[2026-01-01T00:00:00Z] self-heal started: first",
+      "SELFHEAL_PR_CREATED https://g/x/pulls/1",
+      "SELFHEAL_MERGED https://g/x/pulls/1",
+      "[2026-01-01T00:00:09Z] SELFHEAL_RESULT merged, deploying with scripts/update.sh (log: x)",
+      "[2026-02-01T00:00:00Z] self-heal started: second",
+      "[2026-02-01T00:00:05Z] SELFHEAL_RESULT codex made no changes",
+      "",
+    ].join("\n"));
+    assert.deepEqual(parseSelfHealLog(file), { startedAt: "2026-02-01T00:00:00Z", pullRequest: null, merged: false, result: "failed" });
+  });
+
+  it("reports merged runs and their pull request", () => {
+    const file = logWith([
+      "[2026-01-01T00:00:00Z] self-heal started: r",
+      "SELFHEAL_PR_CREATED https://g/x/pulls/42",
+      "SELFHEAL_MERGED https://g/x/pulls/42",
+      "[2026-01-01T00:00:09Z] SELFHEAL_RESULT merged, deploying with scripts/update.sh (log: x)",
+      "",
+    ].join("\n"));
+    assert.deepEqual(parseSelfHealLog(file), { startedAt: "2026-01-01T00:00:00Z", pullRequest: "https://g/x/pulls/42", merged: true, result: "succeeded" });
+  });
+
+  it("classifies results", () => {
+    const result = (text: string) => parseSelfHealLog(logWith(`[2026-01-01T00:00:00Z] self-heal started: r\n[2026-01-01T00:00:01Z] SELFHEAL_RESULT ${text}\n`)).result;
+    assert.equal(result("pull request created"), "succeeded");
+    assert.equal(result("dry run ok, nothing pushed"), "succeeded");
+    assert.equal(result("pull request created (auto-merge disabled)"), "succeeded");
+    assert.equal(result("verification failed"), "failed");
+    assert.equal(result("merge failed, PR left open"), "failed");
+    assert.equal(result("live smoke test failed, PR left open for review"), "failed");
+    assert.equal(parseSelfHealLog(logWith("[2026-01-01T00:00:00Z] self-heal started: r\n")).result, null);
+  });
+
+  it("handles a missing or unrelated log", () => {
+    const empty = { startedAt: null, pullRequest: null, merged: false, result: null };
+    assert.deepEqual(parseSelfHealLog(path.join(tmp("selfheal-parse"), "nope.log")), empty);
+    assert.deepEqual(parseSelfHealLog(logWith("random noise\n")), empty);
+  });
+
+  it("restores state and cooldown after a restart", () => {
+    const started = stamp(60_000);
+    const logFile = logWith(`[${started}] self-heal started: r\nSELFHEAL_PR_CREATED https://g/x/pulls/9\nSELFHEAL_MERGED https://g/x/pulls/9\n[${started}] SELFHEAL_RESULT merged, deploying with scripts/update.sh (log: x)\n`);
+    const h = healer("/nonexistent/scripts/x.sh", logFile, { threshold: 1, cooldownMs: 6 * 3600_000 });
+    const view = h.view();
+    assert.equal(view.state, "succeeded");
+    assert.equal(view.lastPullRequest, "https://g/x/pulls/9");
+    assert.equal(Date.parse(view.lastStartedAt ?? ""), Date.parse(started));
+    assert.ok(view.nextAllowedAt && Date.parse(view.nextAllowedAt) > Date.now() + 5 * 3600_000);
+    assert.equal(h.recordFailure("UI_CHANGED"), undefined, "cooldown must survive the restart");
+    assert.equal(h.view().state, "succeeded");
+  });
+
+  it("allows a run when the restored one is older than the cooldown", () => {
+    const started = stamp(7 * 3600_000);
+    const logFile = logWith(`[${started}] self-heal started: r\n[${started}] SELFHEAL_RESULT verification failed\n`);
+    const h = healer("/nonexistent/scripts/x.sh", logFile, { threshold: 1, cooldownMs: 6 * 3600_000 });
+    assert.equal(h.view().state, "failed");
+    assert.ok(h.recordFailure("UI_CHANGED"));
+  });
+});
+
 describe("JobManager + SelfHealer", () => {
   const options: JobManagerOptions = { minIntervalMs: 0, maxIntervalMs: 0, usageLimitCooldownMs: 60000, sessionRecheckMs: 60000, maxQueueLength: 5 };
   const png = makePng(8, 8);
@@ -199,7 +270,7 @@ describe("JobManager + SelfHealer", () => {
 // scripts/selfheal.sh end to end in dry-run mode, fully offline.
 const toolsMissing = ["flock", "git"].filter((tool) => spawnSync("sh", ["-c", `command -v ${tool}`]).status !== 0);
 
-describe("scripts/selfheal.sh (dry run)", { skip: toolsMissing.length ? `missing tools: ${toolsMissing.join(", ")}` : false }, () => {
+describe("scripts/selfheal.sh (offline)", { skip: toolsMissing.length ? `missing tools: ${toolsMissing.join(", ")}` : false }, () => {
   const git = (cwd: string, ...gitArgs: string[]) => {
     const result = spawnSync("git", ["-c", "user.name=t", "-c", "user.email=t@localhost", "-c", "commit.gpgsign=false", ...gitArgs], { cwd, encoding: "utf8" });
     assert.equal(result.status, 0, `git ${gitArgs.join(" ")}: ${result.stderr}`);
@@ -264,8 +335,22 @@ prompt="\${args[\${#args[@]}-1]}"
     return { base, root, venv, diag, bare };
   }
 
-  function run(codexBody: string, opts: { testScript?: string } = {}) {
+  const FAKE_TEA = `#!/usr/bin/env bash
+echo "$*" >> "$TEA_LOG"
+if [[ "$1 $2" == "pr create" ]]; then echo "https://git.example/org/repo/pulls/42"; exit 0; fi
+if [[ "$1 $2" == "pr merge" ]]; then [[ -z "\${TEA_MERGE_FAIL:-}" ]] && exit 0 || { echo "merge refused" >&2; exit 1; }; fi
+exit 2
+`;
+
+  function run(codexBody: string, opts: { testScript?: string; env?: Record<string, string>; live?: boolean } = {}) {
     const env = setup(opts);
+    const binDir = path.join(env.base, "bin");
+    mkdirSync(binDir);
+    writeFileSync(path.join(binDir, "tea"), FAKE_TEA);
+    chmodSync(path.join(binDir, "tea"), 0o755);
+    const teaLog = path.join(env.base, "tea.log");
+    const updateLog = path.join(env.base, "update.log");
+    writeFileSync(path.join(env.root, "scripts/update.sh"), "#!/usr/bin/env bash\necho \"UPDATE_SUCCEEDED fake\"\n");
     const codex = path.join(env.base, "codex");
     writeFileSync(codex, CODEX_COMMON + codexBody);
     chmodSync(codex, 0o755);
@@ -275,20 +360,26 @@ prompt="\${args[\${#args[@]}-1]}"
       cwd: env.root, encoding: "utf8", timeout: 60_000,
       env: {
         ...process.env,
+        PATH: `${binDir}:${process.env.PATH}`,
+        TEA_LOG: teaLog,
+        UPDATE_LOG_FILE: updateLog,
+        SELFHEAL_SKIP_SMOKE: opts.live ? "false" : "true",
         TMPDIR: env.base,
         MCP_SERVER_TOKEN: "secret",
         SELFHEAL_VENV: env.venv,
         SELFHEAL_CODEX_BIN: codex,
         SELFHEAL_PROFILE_SNAPSHOT: snapshot,
-        SELFHEAL_DRY_RUN: "true",
+        SELFHEAL_DRY_RUN: opts.env?.SELFHEAL_DRY_RUN ?? "true",
         SELFHEAL_REASON: "2 consecutive UI_CHANGED failures",
         DIAGNOSTICS_DIR: env.diag,
         npm_config_offline: "true",
         npm_config_cache: path.join(env.base, "npm-cache"),
+        ...opts.env,
       },
     });
     const output = `${result.stdout}\n${result.stderr}`;
-    return { ...env, result, output, snapshot };
+    const read = (file: string) => (existsSync(file) ? readFileSync(file, "utf8") : "");
+    return { ...env, result, output, snapshot, teaCalls: read(teaLog), updateOutput: read(updateLog) };
   }
 
   it("applies codex changes, verifies and finishes without pushing", () => {
@@ -319,5 +410,63 @@ prompt="\${args[\${#args[@]}-1]}"
     const { result, output } = run(CODEX_EDIT, { testScript: "exit 1" });
     assert.equal(result.status, 5, output);
     assert.match(output, /verification failed/);
+  });
+
+  it("fails the dry run when the live smoke test fails (exit 8)", () => {
+    const { result, output, snapshot } = run(CODEX_EDIT, { live: true });
+    assert.equal(result.status, 8, output);
+    assert.match(output, /live smoke test FAILED/);
+    assert.match(output, /live smoke test failed/);
+    assert.equal(existsSync(snapshot), false);
+  });
+
+  const LIVE = { env: { SELFHEAL_DRY_RUN: "false" } };
+  const branchesOf = (bare: string) => git(bare, "branch", "--list", "--format=%(refname:short)").split("\n").filter(Boolean);
+
+  it("pushes, opens a PR, merges it and hands over to update.sh", () => {
+    const { result, output, snapshot, bare, teaCalls, updateOutput } = run(CODEX_EDIT, LIVE);
+    assert.equal(result.status, 0, output);
+    assert.match(output, /SELFHEAL_PR_CREATED https:\/\/git\.example\/org\/repo\/pulls\/42/);
+    assert.match(output, /SELFHEAL_MERGED https:\/\/git\.example\/org\/repo\/pulls\/42/);
+    assert.match(teaCalls, /^pr create --head selfheal\/chatgpt-scraper-\d{8}-\d{6} --base main /m);
+    assert.match(teaCalls, /^pr merge 42 --style squash /m);
+    assert.match(updateOutput, /UPDATE_SUCCEEDED fake/);
+    assert.ok(branchesOf(bare).some((b) => b.startsWith("selfheal/chatgpt-scraper-")), "branch pushed to origin");
+    assert.equal(existsSync(snapshot), false);
+  });
+
+  it("exits 7 and skips the update when the merge fails", () => {
+    const { result, output, teaCalls, updateOutput, snapshot } = run(CODEX_EDIT, { env: { ...LIVE.env, TEA_MERGE_FAIL: "1" } });
+    assert.equal(result.status, 7, output);
+    assert.match(output, /merge failed, PR left open/);
+    assert.match(teaCalls, /^pr merge 42/m);
+    assert.doesNotMatch(output, /SELFHEAL_MERGED/);
+    assert.equal(updateOutput, "");
+    assert.equal(existsSync(snapshot), false);
+  });
+
+  it("does not merge when SELFHEAL_AUTO_MERGE=false", () => {
+    const { result, output, teaCalls, updateOutput } = run(CODEX_EDIT, { env: { ...LIVE.env, SELFHEAL_AUTO_MERGE: "false" } });
+    assert.equal(result.status, 0, output);
+    assert.match(output, /SELFHEAL_PR_CREATED/);
+    assert.doesNotMatch(teaCalls, /pr merge/);
+    assert.equal(updateOutput, "");
+  });
+
+  it("merges but does not update when SELFHEAL_AUTO_UPDATE=false", () => {
+    const { result, output, teaCalls, updateOutput } = run(CODEX_EDIT, { env: { ...LIVE.env, SELFHEAL_AUTO_UPDATE: "false" } });
+    assert.equal(result.status, 0, output);
+    assert.match(output, /SELFHEAL_MERGED/);
+    assert.match(teaCalls, /^pr merge 42/m);
+    assert.equal(updateOutput, "");
+  });
+
+  it("leaves the PR open and exits 8 when the live smoke test fails", () => {
+    const { result, output, teaCalls, updateOutput } = run(CODEX_EDIT, { live: true, env: LIVE.env });
+    assert.equal(result.status, 8, output);
+    assert.match(output, /SELFHEAL_PR_CREATED/);
+    assert.match(teaCalls, /pr create/);
+    assert.doesNotMatch(teaCalls, /pr merge/);
+    assert.equal(updateOutput, "");
   });
 });
