@@ -9,6 +9,7 @@ MCP server (TypeScript, ESM, Express 5, `@modelcontextprotocol/sdk`) that genera
 - `npm run typecheck`
 - `npm test`: unit tests plus fixture-based browser tests. The browser tests skip if Playwright Chromium is missing. When the default cache is read-only, set `PLAYWRIGHT_BROWSERS_PATH`.
 - `npm run login` (`-- --check`): manual chatgpt.com login with the persistent profile. The server must be stopped first.
+- `npm run selfheal` (`SELFHEAL_DRY_RUN=true`): codex repair of the scraper in a throwaway clone; opens a PR (docs/selfheal.md)
 
 ## Layout
 
@@ -18,6 +19,7 @@ MCP server (TypeScript, ESM, Express 5, `@modelcontextprotocol/sdk`) that genera
 - `src/chatgpt/`: `selectors.ts` (the only DOM knowledge), `client.ts` (page operations), `provider.ts` (one image per new chat), `browser.ts` (persistent context), `prompts.ts`
 - `src/media.ts`, `src/public-media.ts`: disk storage, manifests, HMAC URLs
 - `src/update.ts`, `scripts/update.sh`: authenticated self-update
+- `src/selfheal.ts`, `scripts/selfheal.sh`, `scripts/selfheal/` (prompt, Playwright + playwright-stealth inspector): codex self-heal
 - `test/fixtures/`: reduced chatgpt.com DOM used by `test/client.test.ts`
 
 ## Conventions

@@ -5,7 +5,7 @@ Target: Debian or Ubuntu (one of the last three major releases) in an LXC contai
 ## 1. System packages
 
 ```bash
-apt update && apt install -y git xvfb curl ca-certificates
+apt update && apt install -y git xvfb curl ca-certificates python3 python3-venv   # python3 only for self-heal
 # Node.js >= 20 via NodeSource (see https://github.com/nodesource/distributions)
 curl -fsSL https://deb.nodesource.com/setup_22.x | bash - && apt install -y nodejs
 ```

@@ -22,6 +22,8 @@ MCP client ──POST /mcp──▶ tools.ts ──▶ JobManager (serial queue,
 
 Transient failures (`TURN_TIMED_OUT`, `UI_CHANGED`, `NO_IMAGE_RETURNED`, `BROWSER_ERROR`, generic ChatGPT errors) are retried up to `CHATGPT_RETRIES` times, each in a new chat with a growing pause (`CHATGPT_RETRY_DELAY_SECONDS × attempt`); a crashed browser is relaunched first. Usage limits, lost sessions and content-policy refusals fail immediately. The final error message says how many attempts were made.
 
+Failures that survive the retries and look like frontend changes can trigger a codex self-heal run that opens a pull request ([selfheal.md](selfheal.md)).
+
 `image_count > 1` repeats this in a new chat per image. Every job runs alone because the profile can only be used by one browser.
 
 ## Lineage
