@@ -5,4 +5,4 @@ aptPkgs = ["xvfb"]
 cmds = ["npm ci", "npx playwright install --with-deps chromium"]
 
 [start]
-cmd = "Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp & sleep 2 && DISPLAY=:99 npm start"
+cmd = "rm -f /tmp/.X99-lock /tmp/.X11-unix/X99; Xvfb :99 -screen 0 1280x1024x24 -nolisten tcp & sleep 2 && DISPLAY=:99 npm start"
