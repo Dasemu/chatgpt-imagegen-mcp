@@ -10,3 +10,4 @@ Recurring mistakes and how to avoid them. Several of these come from ZenvairoPro
 - **One process per profile.** Chromium locks the profile directory. Stop the service before `npm run login`.
 - **Don't force contradictory format rules.** Prospect rejected good images because a prompt rule and a QA aspect-ratio rule disagreed. Aspect ratio is a best-effort hint here and is not validated.
 - **zsh and `git show rev:path`.** Quote the argument (`git show 'abc^:path'`), or zsh modifiers such as `:r` mangle it.
+- **Take the image baseline after attaching references.** Reference thumbnails show up in the composer before sending and are not inside a user message, so a baseline taken earlier lets them pass as the generated result. The provider also rejects a download byte-identical to a reference.

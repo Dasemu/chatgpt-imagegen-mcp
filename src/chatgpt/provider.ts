@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { cp, mkdtemp } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
@@ -15,6 +16,8 @@ import { ImageGenerationError, IN_SERVER_RETRY_CODES, isBrowserCrash, toJobError
 import { buildImageRequest } from "./prompts.js";
 
 export const MIN_IMAGE_BYTES = 20_000;
+
+const sha256 = (data: Buffer): string => createHash("sha256").update(data).digest("hex");
 
 export interface ImageProvider {
   generateImages(generationId: string, request: ImageRequest): Promise<StoredOutput[]>;
@@ -98,8 +101,9 @@ export class ChatGptImageProvider implements ImageProvider {
 
   private async generateOne(page: Page, request: ImageRequest): Promise<Buffer> {
     await openNewChat(page, this.config.url, this.diagnostics);
-    const baseline = await imageSources(page);
     await attachReferences(page, request.references, this.diagnostics);
+    // Taken after the upload so the reference thumbnails in the composer are never mistaken for the result.
+    const baseline = await imageSources(page);
     await sendMessage(page, buildImageRequest(request.prompt, request.aspectRatio, request.references.length), this.diagnostics);
     try {
       await waitForTurnComplete(page, this.config.turnTimeoutMs, this.diagnostics);
@@ -109,6 +113,10 @@ export class ChatGptImageProvider implements ImageProvider {
     }
     const src = await waitForGeneratedImage(page, baseline, this.config.imageTimeoutMs, this.diagnostics);
     const image = await downloadImage(page, src);
+    const digest = sha256(image);
+    if (request.references.some((reference) => sha256(Buffer.from(reference.base64, "base64")) === digest)) {
+      throw new ImageGenerationError("ChatGPT returned the reference image instead of a generated one");
+    }
     if (image.length < MIN_IMAGE_BYTES) throw new ImageGenerationError(`Downloaded image is suspiciously small (${image.length} bytes)`);
     if (!imageDimensions(image)) throw new ImageGenerationError("Downloaded file is not a readable PNG, JPEG or WebP image");
     return image;
