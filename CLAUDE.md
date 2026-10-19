@@ -2,7 +2,7 @@
 
 ## Overview
 
-MCP server (TypeScript, ESM, Express 5, `@modelcontextprotocol/sdk`) that generates images by driving chatgpt.com with Playwright. Mirrors the MCP contract of ZenvairoMediaGenerator-MCP (submit + poll, signed public URLs).
+MCP server (TypeScript, ESM, Express 5, `@modelcontextprotocol/sdk`) that generates images by driving chatgpt.com with Playwright. Mirrors the MCP contract of media-mcp (submit + poll, signed public URLs).
 
 ## Commands
 

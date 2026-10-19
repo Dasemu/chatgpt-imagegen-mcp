@@ -22,7 +22,7 @@ export function registerTools(server: McpServer, jobs: JobManager): void {
   server.tool("who_am_i", "Describe the ChatGPT web image backend: model, accepted arguments, queue and session state.", {
     taskTraceId: taskTraceIdSchema,
   }, async ({ taskTraceId }) => jsonResult({
-    service: "Zenvairo ChatGPT Image MCP",
+    service: "ChatGPT Image MCP",
     taskTraceId,
     backend: "chatgpt.com web UI automated with Playwright (unofficial; uses the logged-in account's image quota)",
     workflow: "generate_image returns a generationId immediately; poll query_tasks every 10-20 s. Jobs run one at a time and each image takes roughly 1-3 minutes plus queue time.",

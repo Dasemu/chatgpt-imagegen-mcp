@@ -2,7 +2,7 @@
 
 Remote, stateless Streamable HTTP MCP server that generates images with **ChatGPT in the cloud**. It drives the chatgpt.com web UI with Playwright and a persistent, logged-in Chromium profile. Images come from the account's own ChatGPT image quota; no OpenAI API key is involved.
 
-It uses the same submit + poll contract as ZenvairoMediaGenerator-MCP: `generate_image` returns a `generationId` immediately and `query_tasks` returns the result, including an expiring signed `publicUrl`.
+It uses the same submit + poll contract as media-mcp: `generate_image` returns a `generationId` immediately and `query_tasks` returns the result, including an expiring signed `publicUrl`.
 
 ## Tools
 

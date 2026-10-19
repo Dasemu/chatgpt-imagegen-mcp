@@ -26,7 +26,7 @@ jobs.startCleanup(retentionHours);
 setInterval(() => void orphanCleanup().catch((error) => auditError("orphan_media_cleanup_failed", error)), 15 * 60 * 1000).unref();
 
 function buildServer(): McpServer {
-  const server = new McpServer({ name: "zenvairo-chatgpt-imagegen", version: "0.1.0" });
+  const server = new McpServer({ name: "chatgpt-imagegen", version: "0.1.0" });
   registerTools(server, jobs);
   return server;
 }
@@ -58,7 +58,7 @@ app.get("/public-media/:filename", async (req, res) => {
 registerUpdateRoutes(app);
 app.use(authenticate);
 
-app.get("/health", (_req, res) => res.json({ ok: true, service: "zenvairo-chatgpt-imagegen", publicMediaSigningConfigured: publicMediaSigningConfigured(), ...jobs.status() }));
+app.get("/health", (_req, res) => res.json({ ok: true, service: "chatgpt-imagegen", publicMediaSigningConfigured: publicMediaSigningConfigured(), ...jobs.status() }));
 app.get("/media/:filename", (req, res) => {
   if (!isOutputFilename(req.params.filename)) {
     res.status(404).json({ error: "not_found" });

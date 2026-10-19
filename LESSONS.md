@@ -1,6 +1,6 @@
 # Lessons
 
-Recurring mistakes and how to avoid them. Several of these come from ZenvairoProspect's earlier chatgpt.com automation.
+Recurring mistakes and how to avoid them. Several of these come from an earlier internal chatgpt.com automation project.
 
 - **The composer is not a login signal.** chatgpt.com shows `#prompt-textarea` to logged-out guests too. Detect a login with profile and history markers, and detect logged-out state with login buttons.
 - **Don't scan the whole page for limit or error texts.** The user's prompt is on the page. Check only error banners and the assistant reply.

@@ -64,7 +64,7 @@ export function validatePublicMediaSignature(
 
 function sign(filename: string, expires: number, secret: string): string {
   return createHmac("sha256", secret)
-    .update(`zenvairo-public-media-v1\n${filename}\n${expires}`, "utf8")
+    .update(`chatgpt-imagegen-public-media-v1\n${filename}\n${expires}`, "utf8")
     .digest("base64url");
 }
 

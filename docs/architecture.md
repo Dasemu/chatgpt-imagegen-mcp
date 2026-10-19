@@ -28,7 +28,7 @@ Failures that survive the retries and look like frontend changes can trigger a c
 
 ## Lineage
 
-Ported from ZenvairoProspect's `imagegen` package (Python, branch `legacy/whatsapp-mockup`): selectors as ordered fallback lists, the persistent profile with a manual login, turn detection through the stop button, usage-limit detection by text, downloads through `page.request`, HTML diagnostics and random pacing. The MCP surface, media storage and signed URLs follow ZenvairoMediaGenerator-MCP so clients can switch backends.
+Ported from an earlier internal `imagegen` package (Python, branch `legacy/whatsapp-mockup`): selectors as ordered fallback lists, the persistent profile with a manual login, turn detection through the stop button, usage-limit detection by text, downloads through `page.request`, HTML diagnostics and random pacing. The MCP surface, media storage and signed URLs follow media-mcp so clients can switch backends.
 
 Changes from Prospect:
 - Limit and error texts are matched only against error banners and the assistant reply, never against the whole page. The user's prompt is on the page too.
