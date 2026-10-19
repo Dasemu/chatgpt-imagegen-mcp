@@ -1,5 +1,5 @@
 {
-  "name": "@zenvairo/chatgpt-imagegen-mcp",
+  "name": "chatgpt-imagegen-mcp",
   "version": "0.1.1",
   "description": "Remote Streamable HTTP MCP server that generates images through the chatgpt.com web UI driven by Playwright",
   "type": "module",
